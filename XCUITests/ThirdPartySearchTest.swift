@@ -12,22 +12,16 @@ class ThirdPartySearchTest: BaseTestCase {
     }
 
     func testCustomSearchEngines() {
-        // Visit MDN to add a custom search engine
-        loadWebPage(mozDeveloperWebsite, waitForLoadToFinish: true)
-        addSearchProvider()
-
-        if !isTablet {
-            dismissKeyboardAssistant(forApp: app)
-        }
-
+        navigator.performAction(Action.AddCustomSearchEngine)
+        app.navigationBars["Search"].buttons["Settings"].tap()
+        app.navigationBars["Settings"].buttons["AppSettingsTableViewController.navigationItem.leftBarButtonItem"].tap()
+            
         // Perform a search using a custom search engine
-        tabTrayButton(forApp: app).tap()
-        app.buttons["TabTrayController.addTabButton"].tap()
-        waitForExistence(app.textFields["url"], timeout: 3)
         app.textFields["url"].tap()
         waitForExistence(app.buttons["urlBar-cancel"])
         app.typeText("window")
-        app.scrollViews.otherElements.buttons["developer.mozilla.org search"].tap()
+        app.scrollViews.otherElements.buttons["Mozilla Engine search"].tap()
+        waitUntilPageLoad()
 
         var url = app.textFields["url"].value as! String
         if url.hasPrefix("https://") == false {
@@ -37,22 +31,21 @@ class ThirdPartySearchTest: BaseTestCase {
     }
 
     func testCustomSearchEngineAsDefault() {
-        // Visit MDN to add a custom search engine
-        loadWebPage(mozDeveloperWebsite, waitForLoadToFinish: true)
-        addSearchProvider()
-
-        if !isTablet {
-            dismissKeyboardAssistant(forApp: app)
-        }
-
+        navigator.performAction(Action.AddCustomSearchEngine)
+        
         // Go to settings and set MDN as the default
-        navigator.goto(SearchSettings)
+        waitForExistence(app.tables.cells.element(boundBy: 0))
         app.tables.cells.element(boundBy: 0).tap()
-        app.tables.staticTexts["developer.mozilla.org"].tap()
-        navigator.goto(BrowserTab)
+        waitForExistence(app.tables.staticTexts["Mozilla Engine"])
+        app.tables.staticTexts["Mozilla Engine"].tap()
+        DismissSearchScreen()
 
         // Perform a search to check
-        navigator.openNewURL(urlString:"window")
+        app.textFields["url"].tap()
+        waitForExistence(app.buttons["urlBar-cancel"])
+        app.typeText("window")
+        app.typeText("\r")
+        waitUntilPageLoad()
 
         // Ensure that the default search is MDN
         var url = app.textFields["url"].value as! String
@@ -63,93 +56,40 @@ class ThirdPartySearchTest: BaseTestCase {
     }
 
     func testCustomSearchEngineDeletion() {
-        // Visit MDN to add a custom search engine
-        loadWebPage(mozDeveloperWebsite, waitForLoadToFinish: true)
-        addSearchProvider()
-
-        if !isTablet {
-            dismissKeyboardAssistant(forApp: app)
-        }
-
-        let tabTrayButton = self.tabTrayButton(forApp: app)
-        tabTrayButton.tap()
-        app.buttons["TabTrayController.addTabButton"].tap()
-        waitForExistence(app.textFields["url"], timeout: 3)
+        navigator.performAction(Action.AddCustomSearchEngine)
+        app.navigationBars["Search"].buttons["Settings"].tap()
+        app.navigationBars["Settings"].buttons["AppSettingsTableViewController.navigationItem.leftBarButtonItem"].tap()
         app.textFields["url"].tap()
         waitForExistence(app.buttons["urlBar-cancel"])
         app.typeText("window")
-
-        // For timing issue, we need a wait statement
-        waitForExistence(app.scrollViews.otherElements.buttons["developer.mozilla.org search"])
-        XCTAssert(app.scrollViews.otherElements.buttons["developer.mozilla.org search"].exists)
-        app.typeText("\r")
-
-        // Go to settings and set MDN as the default
-        waitUntilPageLoad()
-        waitForNoExistence(app.alerts.buttons["Don't Allow"], timeoutValue: 15)
-        waitForTabsButton()
-        
-        // Workaround for iOS13, can't go directly to BrowserTabMenu
+        waitForExistence(app.scrollViews.otherElements.buttons["Mozilla Engine search"])
+        XCTAssertTrue(app.scrollViews.otherElements.buttons["Mozilla Engine search"].exists)
+                                
+        // Need to go step by step to Search Settings. The ScreenGraph will fail to go to the Search Settings Screen
+        app.buttons["urlBar-cancel"].tap()
         app.buttons["TabToolbar.menuButton"].tap()
-        navigator.goto(SearchSettings)
-
-        app.navigationBars["Search"].buttons["Edit"].tap()
-        app.tables.buttons["Delete developer.mozilla.org"].tap()
-        app.tables.buttons["Delete"].tap()
-
-        navigator.goto(BrowserTab)
-
+        app.tables["Context Menu"].staticTexts["Settings"].tap()
+        app.tables.staticTexts["Google"].tap()
+        navigator.performAction(Action.RemoveCustomSearchEngine)
+        DismissSearchScreen()
+        
         // Perform a search to check
-        tabTrayButton.tap(force: true)
-        app.buttons["TabTrayController.addTabButton"].tap()
         waitForExistence(app.textFields["url"], timeout: 3)
         app.textFields["url"].tap()
         waitForExistence(app.buttons["urlBar-cancel"])
         app.typeText("window")
-        waitForNoExistence(app.scrollViews.otherElements.buttons["developer.mozilla.org search"])
-        XCTAssertFalse(app.scrollViews.otherElements.buttons["developer.mozilla.org search"].exists)
+        waitForNoExistence(app.scrollViews.otherElements.buttons["Mozilla Engine search"])
+        XCTAssertFalse(app.scrollViews.otherElements.buttons["Mozilla Engine search"].exists)
     }
-
-    private func addSearchProvider() {
-        // Tap on the search field
-        app.webViews.searchFields.element(boundBy: 0).tap()
-        // Workaround due to issue #5442
-        if isTablet {
-            app.buttons["Reload"].tap()
-            waitUntilPageLoad()
-            app.webViews.searchFields.element(boundBy: 0).tap()
-        }
-        app.buttons["AddSearch"].tap()
-        app.alerts["Add Search Provider?"].buttons["OK"].tap()
-        waitForExistence(app.buttons["AddSearch"], timeout: 3)
-        XCTAssertFalse(app.buttons["AddSearch"].isEnabled)
-    }
-
-    func testCustomEngineFromCorrectTemplate() {
-        navigator.goto(SearchSettings)
-        app.tables.cells["customEngineViewButton"].tap()
-
-        app.textViews["customEngineTitle"].tap()
-        app.typeText("Ask")
-        app.textViews["customEngineUrl"].tap()
-        app.typeText("http://www.ask.com/web?q=%s")
-        app.navigationBars.buttons["customEngineSaveButton"].tap()
-
-        // Perform a search using a custom search engine
-        waitForExistence(app.tables.staticTexts["Ask"])
-        navigator.goto(HomePanelsScreen)
-        app.textFields["url"].tap()
-        app.typeText("strange charm")
-        app.scrollViews.otherElements.buttons["Ask search"].tap()
-
-        // Ensure that correct search is done
-        let url = app.textFields["url"].value as! String
-        XCTAssert(url.hasPrefix("www.ask.com"), "The URL should indicate that the search was performed using ask")
+    
+    private func DismissSearchScreen() {
+        waitForExistence(app.navigationBars["Search"].buttons["Settings"])
+        app.navigationBars["Search"].buttons["Settings"].tap()
+        app.navigationBars["Settings"].buttons["AppSettingsTableViewController.navigationItem.leftBarButtonItem"].tap()
     }
 
     func testCustomEngineFromIncorrectTemplate() {
-        navigator.goto(SearchSettings)
-        app.tables.cells["customEngineViewButton"].tap()
+        navigator.goto(AddCustomSearchSettings)
         app.textViews["customEngineTitle"].tap()
         app.typeText("Feeling Lucky")
         app.textViews["customEngineUrl"].tap()
