@@ -722,9 +722,15 @@ func createScreenGraph(for test: XCTestCase, with app: XCUIApplication) -> MMScr
         screenState.gesture(forAction: Action.AddCustomSearchEngine) { userState in
             app.tables.textViews["customEngineTitle"].staticTexts["Search Engine"].tap()
             app.typeText("Mozilla Engine")
-            app.tables.textViews["customEngineUrl"].staticTexts["URL (Replace Query with %s)"].tap()
-            app.typeText("https://developer.mozilla.org/search?q=%s")
-            app.buttons["customEngineSaveButton"].tap()
+            app.tables.textViews["customEngineUrl"].tap()
+            
+            UIPasteboard.general.string = "https://developer.mozilla.org/search?q=%s"
+            
+            let tablesQuery = app.tables
+            let customengineurlTextView = tablesQuery.textViews["customEngineUrl"]
+            customengineurlTextView.staticTexts["URL (Replace Query with %s)"].tap()
+            customengineurlTextView.press(forDuration: 1.0)
+            app.staticTexts["Paste"].tap()
         }
         screenState.backAction = navigationControllerBackAction
     }

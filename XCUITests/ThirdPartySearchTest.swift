@@ -13,13 +13,19 @@ class ThirdPartySearchTest: BaseTestCase {
 
     func testCustomSearchEngines() {
         navigator.performAction(Action.AddCustomSearchEngine)
+        waitForExistence(app.buttons["customEngineSaveButton"], timeout: 3)
+        app.buttons["customEngineSaveButton"].tap()
+
         app.navigationBars["Search"].buttons["Settings"].tap()
         app.navigationBars["Settings"].buttons["AppSettingsTableViewController.navigationItem.leftBarButtonItem"].tap()
             
         // Perform a search using a custom search engine
         app.textFields["url"].tap()
         waitForExistence(app.buttons["urlBar-cancel"])
-        app.typeText("window")
+        UIPasteboard.general.string = "window"
+               app.textFields.firstMatch.press(forDuration: 1)
+               app.staticTexts["Paste"].tap()
+//        app.typeText("window")
         app.scrollViews.otherElements.buttons["Mozilla Engine search"].tap()
         waitUntilPageLoad()
 
@@ -32,7 +38,9 @@ class ThirdPartySearchTest: BaseTestCase {
 
     func testCustomSearchEngineAsDefault() {
         navigator.performAction(Action.AddCustomSearchEngine)
-        
+        waitForExistence(app.buttons["customEngineSaveButton"], timeout: 3)
+        app.buttons["customEngineSaveButton"].tap()
+
         // Go to settings and set MDN as the default
         waitForExistence(app.tables.cells.element(boundBy: 0))
         app.tables.cells.element(boundBy: 0).tap()
@@ -42,9 +50,11 @@ class ThirdPartySearchTest: BaseTestCase {
 
         // Perform a search to check
         app.textFields["url"].tap()
-        waitForExistence(app.buttons["urlBar-cancel"])
-        app.typeText("window")
-        app.typeText("\r")
+
+        UIPasteboard.general.string = "window"
+        app.textFields.firstMatch.press(forDuration: 1)
+        app.staticTexts["Paste & Go"].tap()
+
         waitUntilPageLoad()
 
         // Ensure that the default search is MDN
@@ -61,7 +71,10 @@ class ThirdPartySearchTest: BaseTestCase {
         app.navigationBars["Settings"].buttons["AppSettingsTableViewController.navigationItem.leftBarButtonItem"].tap()
         app.textFields["url"].tap()
         waitForExistence(app.buttons["urlBar-cancel"])
-        app.typeText("window")
+//        app.typeText("window")
+        UIPasteboard.general.string = "window"
+        app.textFields.firstMatch.press(forDuration: 1)
+        app.staticTexts["Paste"].tap()
         waitForExistence(app.scrollViews.otherElements.buttons["Mozilla Engine search"])
         XCTAssertTrue(app.scrollViews.otherElements.buttons["Mozilla Engine search"].exists)
                                 
@@ -77,7 +90,11 @@ class ThirdPartySearchTest: BaseTestCase {
         waitForExistence(app.textFields["url"], timeout: 3)
         app.textFields["url"].tap()
         waitForExistence(app.buttons["urlBar-cancel"])
-        app.typeText("window")
+//        app.typeText("window")
+        UIPasteboard.general.string = "window"
+        app.textFields.firstMatch.press(forDuration: 1)
+        app.staticTexts["Paste"].tap()
+
         waitForNoExistence(app.scrollViews.otherElements.buttons["Mozilla Engine search"])
         XCTAssertFalse(app.scrollViews.otherElements.buttons["Mozilla Engine search"].exists)
     }
@@ -92,9 +109,17 @@ class ThirdPartySearchTest: BaseTestCase {
         navigator.goto(AddCustomSearchSettings)
         app.textViews["customEngineTitle"].tap()
         app.typeText("Feeling Lucky")
-        app.textViews["customEngineUrl"].tap()
-        app.typeText("http://www.google.com/search?q=&btnI") //Occurunces of %s != 1
-
+//        app.textViews["customEngineUrl"].tap()
+//        app.typeText("http://www.google.com/search?q=&btnI") //Occurunces of %s != 1
+        
+        UIPasteboard.general.string = "http://www.google.com/search?q=&btnI"
+        
+        let tablesQuery = app.tables
+        let customengineurlTextView = tablesQuery.textViews["customEngineUrl"]
+        customengineurlTextView.staticTexts["URL (Replace Query with %s)"].tap()
+        customengineurlTextView.press(forDuration: 1.0)
+        app.staticTexts["Paste"].tap()
+        sleep(2)
         app.navigationBars.buttons["customEngineSaveButton"].tap()
 
         waitForExistence(app.alerts.element(boundBy: 0))
