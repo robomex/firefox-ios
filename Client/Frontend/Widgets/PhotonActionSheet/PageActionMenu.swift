@@ -151,6 +151,7 @@ extension PhotonActionSheetProtocol {
             }
         }
 
+        #if WEBXR
         let xrToggleDebug = PhotonActionSheetItem(title: "WebXR Debug", iconString: "menu-Info") { _, _ in
             guard let bvc = presentableVC as? BrowserViewController,
                 let tab = bvc.tabManager.selectedTab
@@ -209,6 +210,7 @@ extension PhotonActionSheetProtocol {
             }
             bvc.scrollController.hideToolbars(animated: true)
         }
+        #endif
         
         var mainActions = [sharePage]
 
@@ -221,7 +223,10 @@ extension PhotonActionSheetProtocol {
             }
         }
 
-        mainActions.append(contentsOf: [sendToDevice, copyURL, xrToggleDebug, xrSwitchCamera, xrResetTracking, xrStopAR, xrReenterFullscreen])
+        mainActions.append(contentsOf: [sendToDevice, copyURL])
+        #if WEBXR
+        mainActions.append(contentsOf: [xrToggleDebug, xrSwitchCamera, xrResetTracking, xrStopAR, xrReenterFullscreen])
+        #endif
 
         let pinAction = (isPinned ? removeTopSitesPin : pinToTopSites)
         var commonActions = [toggleDesktopSite, pinAction]

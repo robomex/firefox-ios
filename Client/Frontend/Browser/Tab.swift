@@ -191,15 +191,15 @@ class Tab: NSObject {
     fileprivate var alertQueue = [JSAlertInfo]()
 
     weak var browserViewController:BrowserViewController?
+    #if WEBXR
     lazy var stateController: AppStateController = AppStateController(state: AppState.defaultState())
     var arkController: ARKController?
     var webController: WebController?
     var messageController: MessageController?
-//    var overlayController: UIOverlayController?
-//    private var animator: Animator?
     private var deferredHitTest: (Int, CGFloat, CGFloat, ResultArrayBlock)? = nil
     private var timerSessionRunningInBackground: Timer?
     private var savedRender: Block? = nil
+    #endif
 
     init(bvc: BrowserViewController, configuration: WKWebViewConfiguration, isPrivate: Bool = false) {
         self.configuration = configuration
@@ -254,22 +254,14 @@ class Tab: NSObject {
         if webView == nil {
             configuration.userContentController = WKUserContentController()
             configuration.allowsInlineMediaPlayback = true
-//            configuration.mediaTypesRequiringUserActionForPlayback = []
-//            configuration.allowsPictureInPictureMediaPlayback = true
-//            configuration.allowsPictureInPictureMediaPlayback = true
-//            let preferences = WKPreferences()
-//            preferences.javaScriptEnabled = true
-//            configuration.preferences = preferences
-            
-//            browserViewController?.webViewContainer = UIView()
-            
+
+            #if WEBXR
             for view in browserViewController?.webViewContainer.subviews ?? [] {
                 view.removeFromSuperview()
             }
-            
+        
             setupXRWebController()
             setupXRControllers()
-//            let webView = TabWebView(frame: .zero, configuration: configuration)
             webController?.webView?.delegate = self
 
             webController?.webView?.accessibilityLabel = NSLocalizedString("Web content", comment: "Accessibility label for the main web content view")
@@ -281,9 +273,6 @@ class Tab: NSObject {
                 webController?.webView?.allowsLinkPreview = false
             }
 
-
-            // Night mode enables this by toggling WKWebView.isOpaque, otherwise this has no effect.
-//            webController?.webView?.backgroundColor = .black
 
             // Turning off masking allows the web content to flow outside of the scrollView's frame
             // which allows the content appear beneath the toolbars in the BrowserViewController
@@ -300,6 +289,34 @@ class Tab: NSObject {
             self.webView?.addObserver(self, forKeyPath: KVOConstants.URL.rawValue, options: .new, context: nil)
             UserScriptManager.shared.injectUserScriptsIntoTab(self, nightMode: nightMode, noImageMode: noImageMode)
             tabDelegate?.tab?(self, didCreateWebView: tabView)
+            
+            #else
+            
+            let webView = TabWebView(frame: .zero, configuration: configuration)
+            webView.delegate = self
+            webView.accessibilityLabel = NSLocalizedString("Web content", comment: "Accessibility label for the main web content view")
+            webView.allowsBackForwardNavigationGestures = true
+            
+            if #available(iOS 13, *) {
+                webView.allowsLinkPreview = true
+            } else {
+                webView.allowsLinkPreview = false
+            }
+            
+            // Night mode enables this by toggling WKWebView.isOpauqe, otherwise this has no effect
+            webView.backgroundColor = .black
+            
+            // Turning off masking allows the web content to flow outside of the scrollView's frame
+            // which allows the content to appear beneath the toolbars in the BrowserViewController
+            webView.scrollView.layer.masksToBounds = false
+            webView.navigationDelegate = navigationDelegate
+            
+            restore(webView)
+            self.webView = webView
+            self.webView?.addObserver(self, forKeyPath: KVOConstants.URL.rawValue, options: .new, context: nil)
+            UserScriptManager.shared.injectUserScriptsIntoTab(self, nightMode: nightMode, noImageMode: noImageMode)
+            tabDelegate?.tab?(self, didCreateWebView: webView)
+            #endif
         }
     }
 
@@ -453,16 +470,20 @@ class Tab: NSObject {
     }
 
     func goBack() {
+        #if WEBXR
         if browserViewController?.webViewContainer.subviews.count ?? 1 > 1 {
             browserViewController?.webViewContainer.subviews[0].removeFromSuperview()
         }
+        #endif
         _ = webView?.goBack()
     }
 
     func goForward() {
+        #if WEBXR
         if browserViewController?.webViewContainer.subviews.count ?? 1 > 1 {
             browserViewController?.webViewContainer.subviews[0].removeFromSuperview()
         }
+        #endif
         _ = webView?.goForward()
     }
 
@@ -471,9 +492,11 @@ class Tab: NSObject {
     }
 
     @discardableResult func loadRequest(_ request: URLRequest) -> WKNavigation? {
+        #if WEBXR
         if browserViewController?.webViewContainer.subviews.count ?? 1 > 1 {
             browserViewController?.webViewContainer.subviews[0].removeFromSuperview()
         }
+        #endif
         
         if let webView = webView {
             stateController.setWebXR(false)
@@ -508,9 +531,11 @@ class Tab: NSObject {
     }
 
     func reload() {
+        #if WEBXR
         if browserViewController?.webViewContainer.subviews.count ?? 1 > 1 {
             browserViewController?.webViewContainer.subviews[0].removeFromSuperview()
         }
+        #endif
         
         // If the current page is an error page, and the reload button is tapped, load the original URL
         if let url = webView?.url, let internalUrl = InternalURL(url), let page = internalUrl.originalURLFromErrorPage {
@@ -656,12 +681,11 @@ class Tab: NSObject {
         UITextField.appearance().keyboardAppearance = isPrivate ? .dark : (ThemeManager.instance.currentName == .dark ? .dark : .light)
     }
     
+    #if WEBXR
     func setupXRControllers() {
+        print("fuck")
         setupXRStateController()
-//        setupAnimator()
         setupMessageController()
-//        setupXRWebController()
-//        setupOverlayController()
         setupXRNotifications()
     }
     
@@ -676,28 +700,17 @@ class Tab: NSObject {
 
         stateController.onModeUpdate = { mode in
             blockSelf?.arkController?.setShowMode(mode)
-//            blockSelf?.overlayController?.setMode(mode)
             guard let showURL = blockSelf?.stateController.shouldShowURLBar() else { return }
             blockSelf?.webController?.showBar(showURL)
-//            if blockSelf?.messageLabel.text != "" {
-//                blockSelf?.showHideMessage(hide: !showURL)
-//            }
-//            blockSelf?.trackingStatusIcon.isHidden = showURL
         }
 
         stateController.onOptionsUpdate = { options in
             blockSelf?.arkController?.setShowOptions(options)
-//            blockSelf?.overlayController?.setOptions(options)
             guard let showURL = blockSelf?.stateController.shouldShowURLBar() else { return }
             blockSelf?.webController?.showBar(showURL)
-//            if blockSelf?.messageLabel.text != "" {
-//                blockSelf?.showHideMessage(hide: !showURL)
-//            }
-//            blockSelf?.trackingStatusIcon.isHidden = showURL
         }
 
         stateController.onXRUpdate = { xr in
-//            blockSelf?.messageLabel.text = ""
             if xr {
                 guard let debugSelected = blockSelf?.webController?.isDebugButtonSelected() else { return }
                 guard let shouldShowSessionStartedPopup = blockSelf?.stateController.state.shouldShowSessionStartedPopup else { return }
@@ -729,8 +742,6 @@ class Tab: NSObject {
                 blockSelf?.browserViewController?.urlBar.updateReaderModeState(.unavailable)
             } else {
                 blockSelf?.stateController.setShowMode(.nothing)
-//                blockSelf?.webController?.barView?.permissionLevelButton?.buttonImage = nil
-//                blockSelf?.webController?.barView?.permissionLevelButton?.isEnabled = blockSelf?.arkController?.webXRAuthorizationStatus == .denied ? true : false
                 if blockSelf?.arkController?.arSessionState == .arkSessionRunning {
                     blockSelf?.timerSessionRunningInBackground?.invalidate()
                     let timerSeconds: Int = UserDefaults.standard.integer(forKey: Constant.secondsInBackgroundKey())
@@ -746,11 +757,8 @@ class Tab: NSObject {
                 blockSelf?.browserViewController?.scrollController.showToolbars(animated: true)
             }
             blockSelf?.updateConstraints()
-//            blockSelf?.cancelAllScheduledMessages()
-//            blockSelf?.showHideMessage(hide: true)
             blockSelf?.arkController?.controller.initializingRender = true
             blockSelf?.savedRender = nil
-//            blockSelf?.trackingStatusIcon.image = nil
             blockSelf?.webController?.setup(forWebXR: xr)
         }
 
@@ -805,7 +813,6 @@ class Tab: NSObject {
 
         stateController.onMemoryWarning = { url in
             blockSelf?.arkController?.controller.previewingSinglePlane = false
-//            blockSelf?.chooseSinglePlaneButton.isHidden = true
             blockSelf?.messageController?.showMessageAboutMemoryWarning(withCompletion: {
                 blockSelf?.webController?.prefillLastURL()
             })
@@ -881,10 +888,6 @@ class Tab: NSObject {
         }
     }
     
-//    func setupAnimator() {
-//        self.animator = Animator()
-//    }
-    
     // MARK: - Setup Message Controller
     
     func setupMessageController() {
@@ -902,7 +905,6 @@ class Tab: NSObject {
         }
 
         messageController?.didHideMessageByUser = {
-            //[[blockSelf stateController] applyOnMessageShowMode];
         }
     }
     
@@ -911,7 +913,6 @@ class Tab: NSObject {
 
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: OperationQueue.main, using: { note in
             blockSelf?.arkController?.controller.previewingSinglePlane = false
-//            blockSelf?.chooseSinglePlaneButton.isHidden = true
             var arSessionState: ARKitSessionState
             if blockSelf?.arkController?.arSessionState != nil {
                 arSessionState = (blockSelf?.arkController?.arSessionState)!
@@ -952,18 +953,15 @@ class Tab: NSObject {
     // MARK: - Setup Web Controller
     
     func setupXRWebController() {
-//        CLEAN_VIEW(v: webLayerView)
         weak var blockSelf: Tab? = self
 
         self.webController = WebController(rootView: browserViewController?.webViewContainer)
         if !ARKController.supportsARFaceTrackingConfiguration() {
             webController?.hideCameraFlipButton()
         }
-//        webController?.animator = animator
         webController?.onStartLoad = {
             if blockSelf?.arkController != nil {
                 blockSelf?.arkController?.controller.previewingSinglePlane = false
-//                blockSelf?.chooseSinglePlaneButton.isHidden = true
                 let lastURL = blockSelf?.webController?.lastURL
                 let currentURL = blockSelf?.webController?.webView?.url?.absoluteString
 
@@ -988,8 +986,6 @@ class Tab: NSObject {
         }
 
         webController?.onFinishLoad = {
-            //         [blockSelf hideSplashWithCompletion:^
-            //          { }];
         }
         
         webController?.onInitAR = { uiOptionsDict in
@@ -1003,7 +999,6 @@ class Tab: NSObject {
 
         webController?.onError = { error in
             if let error = error {
-//                blockSelf?.showWebError(error as NSError)
             }
         }
 
@@ -1116,21 +1111,6 @@ class Tab: NSObject {
         }
         
         webController?.onSettingsButtonTapped = {
-            // Before showing the settings popup, we hide the bar and the debug buttons so they are not in the way
-            // After dismissing the popup, we show them again.
-//            let settingsViewController = SettingsViewController()
-//            let navigationController = UINavigationController(rootViewController: settingsViewController)
-//            weak var weakSettingsViewController = settingsViewController
-//            settingsViewController.onDoneButtonTapped = {
-//                weakSettingsViewController?.dismiss(animated: true)
-//                blockSelf?.webController?.showBar(true)
-//                blockSelf?.stateController.setShowMode(.url)
-//            }
-//
-//            blockSelf?.webController?.showBar(false)
-//            blockSelf?.webController?.hideKeyboard()
-//            blockSelf?.stateController.setShowMode(.nothing)
-//            blockSelf?.present(navigationController, animated: true)
         }
 
         webController?.onComputerVisionDataRequested = {
@@ -1139,20 +1119,6 @@ class Tab: NSObject {
         }
 
         webController?.onResetTrackingButtonTapped = {
-
-//            blockSelf?.messageController?.showMessageAboutResetTracking({ option in
-//                guard let state = blockSelf?.stateController.state else { return }
-//                switch option {
-//                    case .resetTracking:
-//                        blockSelf?.arkController?.runSessionResettingTrackingAndRemovingAnchors(with: state)
-//                    case .removeExistingAnchors:
-//                        blockSelf?.arkController?.runSessionRemovingAnchors(with: state)
-//                    case .saveWorldMap:
-//                        blockSelf?.arkController?.saveWorldMap()
-//                    case .loadSavedWorldMap:
-//                        blockSelf?.arkController?.loadSavedMap()
-//                }
-//            })
         }
 
         webController?.onStartSendingComputerVisionData = {
@@ -1173,7 +1139,6 @@ class Tab: NSObject {
         }
 
         webController?.onGetWorldMap = { completion in
-//            let completion = completion as? GetWorldMapCompletionBlock
             blockSelf?.arkController?.getWorldMap(completion)
         }
 
@@ -1194,8 +1159,6 @@ class Tab: NSObject {
         }
 
         webController?.onSwitchCameraButtonTapped = {
-//            let numberOfImages = blockSelf?.stateController.state.numberOfTrackedImages ?? 0
-//            blockSelf?.arkController?.switchCameraButtonTapped(numberOfImages)
             guard let state = blockSelf?.stateController.state else { return }
             blockSelf?.arkController?.switchCameraButtonTapped(state)
         }
@@ -1223,31 +1186,9 @@ class Tab: NSObject {
         }
     }
     
-    // MARK: Setup Overlay Controller
-    
-//    func setupOverlayController() {
-//        CLEAN_VIEW(v: hotLayerView)
-//
-//        weak var blockSelf: Tab? = self
-//
-//        let debugAction: HotAction = { any in
-//            blockSelf?.stateController.invertDebugMode()
-//        }
-//
-//        browserViewController?.webViewContainer.processTouchInSubview = true
-//
-//        self.overlayController = UIOverlayController(rootView: browserViewController?.webViewContainer ?? UIView(), debugAction: debugAction)
-//
-//        overlayController?.animator = animator
-//
-//        overlayController?.setMode(stateController.state.showMode)
-//        overlayController?.setOptions(stateController.state.showOptions)
-//    }
-    
     // MARK: - Setup ARK Controller
     
     func setupARKController() {
-//        CLEAN_VIEW(v: arkLayerView)
 
         weak var blockSelf: Tab? = self
 
@@ -1255,7 +1196,6 @@ class Tab: NSObject {
             print("Unable to grab tab webView")
             return
         }
-//        arkController = ARKController(type: UserDefaults.standard.bool(forKey: Constant.useMetalForARKey()) ? .arkMetal : .arkSceneKit, rootView: self.view)
         arkController = ARKController(type: .arkMetal, rootView: browserViewController?.webViewContainer ?? UIView())
 
         arkController?.didUpdate = {
@@ -1287,25 +1227,13 @@ class Tab: NSObject {
                 let webXR = blockSelf?.stateController.state.webXR,
                 webXR
             {
-//                blockSelf?.showTrackingQualityInfo(for: camera.trackingState, autoHide: true)
-//                blockSelf?.updateTrackingStatusIcon(for: camera.trackingState)
-//                switch camera.trackingState {
-//                case .notAvailable:
-//                    return
-//                case .limited:
-//                    blockSelf?.escalateFeedback(for: camera.trackingState, inSeconds: 3.0)
-//                case .normal:
-//                    blockSelf?.cancelScheduledMessage(forType: .trackingStateEscalation)
-//                }
             }
         }
         arkController?.sessionWasInterrupted = {
-//            blockSelf?.overlayController?.setARKitInterruption(true)
             blockSelf?.messageController?.showMessageAboutARInterruption(true)
             blockSelf?.webController?.wasARInterruption(true)
         }
         arkController?.sessionInterruptionEnded = {
-//            blockSelf?.overlayController?.setARKitInterruption(false)
             blockSelf?.messageController?.showMessageAboutARInterruption(false)
             blockSelf?.webController?.wasARInterruption(false)
         }
@@ -1356,8 +1284,6 @@ class Tab: NSObject {
             blockSelf?.webController?.updateWindowSize()
         }
 
-//        animator?.animate(browserViewController?.webViewContainer, toFade: false)
-
         arkController?.startSession(with: stateController.state)
         
         if arkController?.usingMetal ?? false {
@@ -1398,10 +1324,6 @@ class Tab: NSObject {
         if let arController = arkController?.controller as? ARKMetalController {
             arController.focusedPlane = nil
         }
-//        else if let arController = arkController?.controller as? ARKSceneKitController {
-//            arController.focusedPlane = nil
-//        }
-//        chooseSinglePlaneButton.isHidden = true
 
         stateController.state.numberOfTimesSendNativeTimeWasCalled = 0
         stateController.setARRequest(request) { () -> () in
@@ -1462,7 +1384,6 @@ class Tab: NSObject {
                     
                     if access == .lite {
                         blockSelf?.arkController?.controller.previewingSinglePlane = true
-//                        blockSelf?.chooseSinglePlaneButton.isHidden = false
                         if blockSelf?.stateController.state.shouldShowLiteModePopup ?? false {
                             blockSelf?.stateController.state.shouldShowLiteModePopup = false
                             blockSelf?.messageController?.showMessage(withTitle: "Lite Mode Started", message: "Choose one plane to share with this website.", hideAfter: 2)
@@ -1493,7 +1414,6 @@ class Tab: NSObject {
                     
                     if access == .lite {
                         blockSelf?.arkController?.controller.previewingSinglePlane = true
-//                        blockSelf?.chooseSinglePlaneButton.isHidden = false
                         if blockSelf?.stateController.state.shouldShowLiteModePopup ?? false {
                             blockSelf?.stateController.state.shouldShowLiteModePopup = false
                             blockSelf?.messageController?.showMessage(withTitle: "Lite Mode Started", message: "Choose one plane to share with this website.", hideAfter: 2)
@@ -1512,7 +1432,6 @@ class Tab: NSObject {
         }
 
         return dictionary
-//        return arkController?.getARKData() ?? [:]
     }
     
     func loadURL(_ url: String?) {
@@ -1530,8 +1449,6 @@ class Tab: NSObject {
     }
     
     func startNewARKitSession(withRequest request: [AnyHashable : Any]?) {
-//        setupLocationController()
-//        locationManager?.setup(forRequest: request)
         setupARKController()
     }
     
@@ -1599,14 +1516,12 @@ class Tab: NSObject {
     }
     
     func updateConstraints() {
-//        guard let barViewHeight = webController?.barViewHeightAnchorConstraint else { return }
         guard let webViewTop = webController?.webViewTopAnchorConstraint else { return }
         guard let webViewLeft = webController?.webViewLeftAnchorConstraint else { return }
         guard let webViewRight = webController?.webViewRightAnchorConstraint else { return }
         let webXR = stateController.state.webXR
         // If XR is active, then the top anchor is 0 (fullscreen), else topSafeAreaInset + Constant.urlBarHeight()
         let topSafeAreaInset = UIApplication.shared.keyWindow?.safeAreaInsets.top ?? 0.0
-//        barViewHeight.constant = topSafeAreaInset + Constant.urlBarHeight()
         webViewTop.constant = webXR ? 0.0 : topSafeAreaInset + Constant.urlBarHeight()
 
         webViewLeft.constant = 0.0
@@ -1627,6 +1542,7 @@ class Tab: NSObject {
         webView?.setNeedsLayout()
         webView?.layoutIfNeeded()
     }
+    #endif
 }
 
 extension Tab: TabWebViewDelegate {
